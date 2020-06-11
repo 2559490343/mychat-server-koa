@@ -8,6 +8,14 @@ const onerror = require('koa-onerror')
 const bodyparser = require('koa-bodyparser')
 const logger = require('koa-logger')
 
+//操作数据库,引入这两个模块哦
+const mongoose = require('mongoose')
+const dbConfig = require('./dbs/config')
+//mongoose 连接数据库
+mongoose.connect(dbConfig.dbs, {
+  useNewUrlParser: true
+})
+
 const index = require('./routes/index')
 const users = require('./routes/users')
 
