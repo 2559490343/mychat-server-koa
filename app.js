@@ -13,7 +13,8 @@ const mongoose = require('mongoose')
 const dbConfig = require('./dbs/config')
 //mongoose 连接数据库
 mongoose.connect(dbConfig.dbs, {
-  useNewUrlParser: true
+  useNewUrlParser: true,
+  useUnifiedTopology: true
 })
 
 const index = require('./routes/index')

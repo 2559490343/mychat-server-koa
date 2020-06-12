@@ -8,41 +8,56 @@ router.prefix('/users')
 router.post('/login', async (ctx, next) => {
   // console.log(ctx.request.body);
   let request = ctx.request;
-  const user = new User({
-    username: request.body.username,
-    password: request.body.password
-  })
   let code, msg, data
-  try {
-    code = 1;
-    msg = ""
-  } catch (err) {
-
-  }
+  await User.findOne({ username: request.body.username, password: request.body.password }, (err, doc) => {
+    if (err) {
+      code = 0;
+      msg = '系统错误!';
+      data = null;
+      return
+    }
+    if (doc) {
+      code = 1;
+      msg = '登陆成功!';
+      data = { userInfo: doc }
+    } else {
+      code = 0;
+      msg = '用户名或密码错误!';
+      data = null;
+    }
+  })
   ctx.body = res(code, msg, data)
 })
 
 router.post('/register', async (ctx, next) => {
-  // console.log(ctx.request.body);
   let request = ctx.request;
   const user = new User({
     username: request.body.username,
-    password: request.body.password
+    password: request.body.password,
+    nickname: request.body.username,
+    avatarUrl: 'https://dss3.bdstatic.com/70cFv8Sh_Q1YnxGkpoWK1HF6hhy/it/u=1408233282,1483083519&fm=26&gp=0.jpg'
   })
   let code, msg, data
-  try {
-    // await user.save();
-    console.log(User.find({ username: request.body.username }));
+  await User.find({ username: request.body.username }, async (err, doc) => {
+    if (err) {
+      code = 0;
+      msg = "系统错误，注册失败！";
+      data = null
+      return
+    }
+    if (doc.length) {
+      code = 0;
+      msg = '用户名已被注册!';
+      data = null
+    } else {
+      await user.save();
+      code = 1;
+      msg = "注册成功！";
+      data = null
+    }
+  });
+  // console.log(err);
 
-    code = 1;
-    msg = "注册成功！";
-    data = []
-  } catch (err) {
-    console.log(err);
-    code = 0;
-    msg = "注册失败！";
-    data = []
-  }
   ctx.body = res(code, msg, data)
 })
 module.exports = router
