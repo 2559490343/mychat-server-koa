@@ -1,6 +1,5 @@
 const router = require('koa-router')()
 const res = require('../public/javascripts/res')
-
 const User = require('../dbs/moduls/users')
 
 router.prefix('/users')
@@ -9,23 +8,25 @@ router.post('/login', async (ctx, next) => {
   // console.log(ctx.request.body);
   let request = ctx.request;
   let code, msg, data
-  await User.findOne({ username: request.body.username, password: request.body.password }, (err, doc) => {
-    if (err) {
-      code = 0;
-      msg = '系统错误!';
-      data = null;
-      return
-    }
-    if (doc) {
-      code = 1;
-      msg = '登陆成功!';
-      data = { userInfo: doc }
-    } else {
-      code = 0;
-      msg = '用户名或密码错误!';
-      data = null;
-    }
-  })
+  await User.findOne({ username: request.body.username, password: request.body.password },
+    (err, doc) => {
+      if (err) {
+        code = 0;
+        msg = '系统错误!';
+        data = null;
+        return
+      }
+      if (doc) {
+        code = 1;
+        msg = '登陆成功!';
+        ctx.session.user = doc;
+        data = { userInfo: doc }
+      } else {
+        code = 0;
+        msg = '用户名或密码错误!';
+        data = null;
+      }
+    })
   ctx.body = res(code, msg, data)
 })
 
@@ -35,7 +36,8 @@ router.post('/register', async (ctx, next) => {
     username: request.body.username,
     password: request.body.password,
     nickname: request.body.username,
-    avatarUrl: 'https://dss3.bdstatic.com/70cFv8Sh_Q1YnxGkpoWK1HF6hhy/it/u=1408233282,1483083519&fm=26&gp=0.jpg'
+    avatarUrl: 'https://dss3.bdstatic.com/70cFv8Sh_Q1YnxGkpoWK1HF6hhy/it/u=1408233282,1483083519&fm=26&gp=0.jpg',
+    friends: []
   })
   let code, msg, data
   await User.find({ username: request.body.username }, async (err, doc) => {
@@ -59,5 +61,28 @@ router.post('/register', async (ctx, next) => {
   // console.log(err);
 
   ctx.body = res(code, msg, data)
+})
+
+router.get('getFrientsList', async (ctx, next) => {
+  let query = ctx.query;
+  let code, msg, data
+  let friendsList = [];
+  await User.findOne({ _id: query._id }, (err, doc) => {
+    if (err) {
+      code = 0;
+      msg = "系统错误!"
+      data = null;
+      return
+    }
+    if (doc) {
+      doc.friends.forEach(item => {
+        friendsList.push(item)
+      })
+    } else {
+      code = 0;
+      msg = "查询不到当前用户!"
+      data = null
+    }
+  })
 })
 module.exports = router
