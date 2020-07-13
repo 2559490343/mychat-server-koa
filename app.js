@@ -45,8 +45,24 @@ const jwtKoa = require('koa-jwt')
 const util = require('util')
 const verify = util.promisify(jwt.verify) // 解密
 const secret = 'myChatJwt'
+// 拦截token错误拦截
+app.use(async (ctx, next) => {
+  console.log('token错误拦截::---------------');
+  return next().catch((err) => {
+    if (err.status === 401) {
+      ctx.status = 200;
+      ctx.body = {
+        code: -1,
+        msg: 'token无效',
+        data: null
+      }
+    } else {
+      throw err;
+    }
+  })
+});
 app.use(jwtKoa({ secret }).unless({
-  path: [/^\/users\/login/] //数组中的路径不需要通过jwt验证
+  path: [/^\/users\/login/, /^\/users\/register/] //数组中的路径不需要通过jwt验证
 }))
 Koa.jwt = jwt;
 Koa.secret = secret;

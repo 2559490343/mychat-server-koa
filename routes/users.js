@@ -1,7 +1,7 @@
 const router = require('koa-router')()
 const res = require('../public/javascripts/res')
 const User = require('../dbs/moduls/users')
-const koa = require('koa')
+const Koa = require('koa')
 // 获取汉字首字拼音
 const cnchar = require('cnchar')
 router.prefix('/users')
@@ -19,14 +19,15 @@ router.post('/login', async (ctx, next) => {
         return
       }
       if (doc) {
-        koa.redis.set(`${doc._id}-Info`, JSON.stringify(doc));
+        Koa.redis.set(`${doc._id}-Info`, JSON.stringify(doc));
         code = 1;
         msg = '登陆成功!';
         let userToken = {
-          username: request.body.username
+          username: request.body.username,
+          _id: doc._id
         }
-        const token = koa.jwt.sign(userToken, koa.secret, { expiresIn: '1h' });
-        data = { userInfo: doc ,token}
+        const token = Koa.jwt.sign(userToken, Koa.secret, { expiresIn: '1h' });
+        data = { userInfo: doc, token }
       } else {
         code = 0;
         msg = '用户名或密码错误!';
