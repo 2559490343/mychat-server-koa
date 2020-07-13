@@ -6,6 +6,7 @@ const Koa = require('koa')
 
 router.prefix('/chat')
 
+// 发送消息
 router.post('/sendChatMsg', async (ctx, next) => {
     let request = ctx.request;
     const chatMsg = new ChatMsg({
@@ -22,7 +23,6 @@ router.post('/sendChatMsg', async (ctx, next) => {
         sendUserAvatar: request.body.sendUserAvatar,
         _id: chatMsg._id
     }
-    Koa.socketMap[request.body.receiveUserId].emit('getChatMsg', chatMsgObj);
     // Koa.socketArr.some(socket => {
     //     // console.log(socket.userId, request.body.receiveUserId);
     //     if (socket.userId == request.body.receiveUserId) {
@@ -33,7 +33,7 @@ router.post('/sendChatMsg', async (ctx, next) => {
     //         return true
     //     }
     // })
-
+    Koa.socketMap[request.body.receiveUserId] && Koa.socketMap[request.body.receiveUserId].emit('getChatMsg', chatMsgObj);
     let code, msg, data;
     await chatMsg.save();
     code = 1;
@@ -41,12 +41,13 @@ router.post('/sendChatMsg', async (ctx, next) => {
     data = null;
     ctx.body = res(code, msg, data)
 })
+// 获取聊天列表
 router.get('/getChatList', async (ctx, next) => {
     let code, msg, data
-    // console.log(ctx.session.user._id);
     let chatList = [];
+    let user = await Koa.redis.get('user');
     // 使用for of await 解决循环内异步问题
-    for (let id of ctx.session.user.friends) {
+    for (let id of JSON.parse(user).friends) {
         await User.findOne({ _id: id }, (err, doc) => {
             if (err) {
                 code = 0;
@@ -69,10 +70,13 @@ router.get('/getChatList', async (ctx, next) => {
     data = { chatList }
     ctx.body = res(code, msg, data)
 })
+// 获取单人聊天记录
 router.post('/getHisChatMsgList', async (ctx, next) => {
     let code, msg, data
     let request = ctx.request;
-    let chatMsgList = []
+    let chatMsgList = [];
+    let pageNo = request.body.pageNo;
+    let pageSize = request.body.pageSize;
     await ChatMsg.find({ $or: [{ sendUserId: request.body.sendUserId, receiveUserId: request.body.receiveUserId }, { sendUserId: request.body.receiveUserId, receiveUserId: request.body.sendUserId }] }, async (err, doc) => {
         if (err) {
             code = 0;
@@ -89,7 +93,8 @@ router.post('/getHisChatMsgList', async (ctx, next) => {
                     chatMsg: chatMsg.chatMsg,
                     msgDate: chatMsg.msgDate
                 };
-                chatMsgList.push(obj)
+                // chatMsgList.push(obj)
+                chatMsgList.unshift(obj)
             })
             code = 1;
             msg = '查询成功！';
@@ -100,8 +105,8 @@ router.post('/getHisChatMsgList', async (ctx, next) => {
             data = { chatMsgList: [] }
         }
 
-    }).skip(request.body.pageNo)
-        .limit(request.body.pageSize)
+    }).sort({ _id: -1 }).skip(pageNo * pageSize)
+        .limit(pageSize)
     for (let chatMsg of chatMsgList) {
         await User.findOne({ _id: chatMsg.sendUserId }, (err, doc) => {
             if (err) {

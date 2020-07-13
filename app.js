@@ -1,12 +1,18 @@
 const Koa = require('koa')
 const app = new Koa()
 
+
+
 // 跨域配置
 var cors = require('koa2-cors');
 app.use(cors({
   credentials: true,//默认情况下，Cookie不包括在CORS请求之中。设为true，即表示服务器许可Cookie可以包含在请求中
   origin: ctx => ctx.header.origin, // web前端服务器地址，注意这里不能用*
 }));
+
+// ssl配置
+const sslify = require('koa-sslify').default;
+app.use(sslify());
 
 const views = require('koa-views')
 const json = require('koa-json')
@@ -32,6 +38,25 @@ const CONFIG = {
   renew: true
 };
 app.use(session(CONFIG, app))
+
+// jwt
+const jwt = require('jsonwebtoken')
+const jwtKoa = require('koa-jwt')
+const util = require('util')
+const verify = util.promisify(jwt.verify) // 解密
+const secret = 'myChatJwt'
+app.use(jwtKoa({ secret }).unless({
+  path: [/^\/users\/login/] //数组中的路径不需要通过jwt验证
+}))
+Koa.jwt = jwt;
+Koa.secret = secret;
+Koa.verify = verify;
+
+
+
+// redis
+const redis = require("./redis/config")
+Koa.redis = redis;
 
 
 //操作数据库,引入这两个模块
@@ -81,5 +106,15 @@ app.use(chatMsg.routes(), chatMsg.allowedMethods())
 app.on('error', (err, ctx) => {
   console.error('server error', err, ctx)
 });
+function uncaughtExceptionHandler(err) {
+  if (err && err.code == 'ECONNREFUSED') {
+    //do someting
+    console.log('redis断开连接或者连不上');
+
+  } else {
+    process.exit(1);
+  }
+}
+process.on('uncaughtException', uncaughtExceptionHandler);
 
 module.exports = app
