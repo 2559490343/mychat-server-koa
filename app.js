@@ -25,20 +25,6 @@ const static = require('koa-static');
 app.use(static(__dirname + '/static'))
 
 
-// session配置
-const session = require('koa-session');
-app.keys = ['some secret hurr'];//cookie的签名
-const CONFIG = {
-  key: 'koa:sess', //默认
-  maxAge: 86400000,//cookie的过期时间
-  overwrite: true,
-  httpOnly: true,//true表示只有服务器端可以获取cookie
-  signed: true,
-  rolling: false,
-  renew: true
-};
-app.use(session(CONFIG, app))
-
 // jwt
 const jwt = require('jsonwebtoken')
 const jwtKoa = require('koa-jwt')
@@ -47,9 +33,9 @@ const verify = util.promisify(jwt.verify) // 解密
 const secret = 'myChatJwt'
 // 拦截token错误拦截
 app.use(async (ctx, next) => {
-  console.log('token错误拦截::---------------');
   return next().catch((err) => {
     if (err.status === 401) {
+      console.log('token错误拦截::---------------');
       ctx.status = 200;
       ctx.body = {
         code: -1,
@@ -62,7 +48,7 @@ app.use(async (ctx, next) => {
   })
 });
 app.use(jwtKoa({ secret }).unless({
-  path: [/^\/users\/login/, /^\/users\/register/] //数组中的路径不需要通过jwt验证
+  path: [/^\/users\/login/, /^\/users\/register/, /^\/static\/files/] //数组中的路径不需要通过jwt验证
 }))
 Koa.jwt = jwt;
 Koa.secret = secret;
@@ -93,6 +79,9 @@ require('./public/javascripts/socket');
 // error handler
 onerror(app)
 
+// 引入工具js
+const utils = require('./public/javascripts/utils')
+Koa.utils = utils;
 // middlewares
 app.use(bodyparser({
   enableTypes: ['json', 'form', 'text']

@@ -45,21 +45,10 @@ router.post('/sendChatMsg', async (ctx, next) => {
 router.get('/getChatList', async (ctx, next) => {
     let code, msg, data
     let chatList = [];
-    const token = ctx.header.authorization;
-    let payload;
-    if (token) {
-        payload = await Koa.verify(token.split(' ')[1], Koa.secret)  // // 解密，获取payload
-        console.log(payload);
-    } else {
-        ctx.body = {
-            msg: 'token 错误',
-            code: -1,
-            data: null
-        }
-    }
-    let user = await Koa.redis.get('user');
+    let user = await Koa.utils.getRedis(ctx);
+    // console.log(user);
     // 使用for of await 解决循环内异步问题
-    for (let id of JSON.parse(user).friends) {
+    for (let id of user.friends) {
         await User.findOne({ _id: id }, (err, doc) => {
             if (err) {
                 code = 0;

@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "npm run dev",
+    "start": "cross-env APP_ENV=dev npm run dev",
     "dev": "./node_modules/.bin/nodemon bin/www",
-    "prd": "pm2 start bin/www",
+    "pm2": "cross-env APP_ENV=pro pm2 start bin/www",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
@@ -27,11 +27,13 @@
     "koa-views": "^6.2.0",
     "koa2-cors": "^2.0.6",
     "mongoose": "^5.9.18",
+    "multiparty": "^4.2.1",
     "pug": "^2.0.3",
     "socket.io": "^2.3.0",
     "util": "^0.12.3"
   },
   "devDependencies": {
+    "cross-env": "^7.0.2",
     "nodemon": "^1.19.1"
   }
 }

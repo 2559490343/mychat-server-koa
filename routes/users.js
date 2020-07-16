@@ -1,7 +1,9 @@
 const router = require('koa-router')()
 const res = require('../public/javascripts/res')
 const User = require('../dbs/moduls/users')
+const ApplyList = require('../dbs/moduls/applyList')
 const Koa = require('koa')
+const multiparty = require("multiparty");
 // 获取汉字首字拼音
 const cnchar = require('cnchar')
 router.prefix('/users')
@@ -270,8 +272,17 @@ router.get('/getFrientsList', async (ctx, next) => {
     if (!has) {
       mailList[mailList.length - 1].friends.push(item)
     }
+  });
+  let applyCount = 0;
+  await ApplyList.find({ receiveUserId: query._id, isAgree: false }, (err, docs) => {
+    if (err) {
+      return
+    }
+    if (docs) {
+      applyCount = docs.length;
+    }
   })
-  data = { mailList }
+  data = { mailList, applyCount }
   ctx.body = res(code, msg, data)
 })
 // 搜索好友
@@ -308,6 +319,144 @@ router.get('/searchFriends', async (ctx, next) => {
 })
 // 发送好友申请
 router.get('/sendAddFriends', async (ctx, next) => {
+  let code, msg, data;
+  const receiveId = ctx.query._id;
+  const user = await Koa.utils.getRedis(ctx);
+  const apply = new ApplyList({
+    applyUserId: user._id,
+    receiveUserId: receiveId,
+    applyDate: new Date(),
+    isAgree: false
+  });
+  if (user.friends.includes(receiveId)) {
+    code = 0;
+    msg = '此用户已经是您的好友，无法重复添加!';
+  } else if (user._id == receiveId) {
+    code = 0;
+    msg = '无法添加自己为好友!';
+  } else {
+    await ApplyList.findOne({
+      applyUserId: user._id,
+      receiveUserId: receiveId,
+    }, (err, doc) => {
+      if (err) {
+        return
+      }
+      if (doc) {
+        code = 0;
+        msg = '请勿重复发送申请!'
+      } else {
+        code = 1;
+        msg = '发送成功!';
+        apply.save();
+      }
+    })
+  }
 
+  ctx.body = res(code, msg, data)
+})
+// 修改用户头像
+router.post('/changeUserAvatar', async (ctx, next) => {
+  let code, msg, data
+  let form = new multiparty.Form({ uploadDir: './static/files/' });
+  form.maxFilesSize = 3 * 1024 * 1024;
+  let uploadImg = function () {
+    return new Promise((resolve, reject) => {
+      form.parse(ctx.req, async (err, fields, files) => {
+        if (err) {
+          if (err.message == 'maximum file length exceeded') {
+            code = 0;
+            data = null;
+            msg = '图片不能大于3M!';
+          }
+          resolve(err)
+          return
+        }
+        const baseUrl = process.env.APP_ENV === 'dev' ? 'https://localhost:3000' : 'https://xiongxiong.site:3000'
+        const avatarUrl = baseUrl + files.file[0].path.replace('static', '');//文件信息
+        let user = await Koa.utils.getRedis(ctx);
+        await User.updateOne({ _id: user._id }, { avatarUrl }, (err, docs) => {
+          if (err) {
+            code = 0;
+            data = null;
+            msg = '数据库错误';
+            return
+          }
+          code = 1;
+          data = { avatarUrl };
+          msg = '上传成功';
+        })
+        resolve(true)
+      });
+    })
+  }
+  await uploadImg()
+  ctx.body = res(code, msg, data)
+
+})
+// 修改用户昵称
+router.get('/changeUserNickname', async (ctx, next) => {
+  let code, msg, data
+  const nickname = ctx.query.nickname;
+  const user = await Koa.utils.getRedis(ctx);
+  await User.updateOne({ _id: user._id }, { nickname }, (err, doc) => {
+    if (err) {
+      return
+    }
+    code = 1;
+    msg = '修改成功!'
+  })
+  ctx.body = res(code, msg, data)
+
+})
+// 获取好友申请记录列表
+router.get('/getApplyList', async (ctx, next) => {
+  const user = await Koa.utils.getRedis(ctx);
+  let code, msg, data;
+  let applyList = [];
+  let resultList;
+  await ApplyList.find({ receiveUserId: user._id }, async (err, docs) => {
+    if (err) {
+      return
+    }
+    if (docs) {
+      resultList = [...docs];
+    }
+  })
+  for (let applyRecord of resultList) {
+    await User.findOne({ _id: applyRecord.applyUserId }, (err, doc) => {
+      if (err) {
+        return
+      }
+      if (doc) {
+        let obj = {
+          _id: applyRecord._id,
+          nickname: doc.nickname,
+          avatarUrl: doc.avatarUrl,
+          username: doc.username,
+          applyDate: applyRecord.applyDate,
+          isAgree: applyRecord.isAgree
+        }
+        applyList.push(obj)
+      }
+    })
+  }
+  code = 1;
+  msg = "查询成功!"
+  data = { applyList }
+  ctx.body = res(code, msg, data)
+})
+// 同意好友申请
+router.get('/agreeApply', async (ctx) => {
+  let code, data, msg;
+  const _id = ctx.query._id;
+  await ApplyList.updateOne({ _id }, { isAgree: true }, (err, doc) => {
+    if (err) {
+      return
+    }
+    code = 1;
+    msg = '修改成功'
+  });
+  ctx.body = res(code, msg, data)
 })
 module.exports = router
