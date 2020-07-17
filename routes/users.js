@@ -450,13 +450,40 @@ router.get('/getApplyList', async (ctx, next) => {
 router.get('/agreeApply', async (ctx) => {
   let code, data, msg;
   const _id = ctx.query._id;
+  let applyUserId, receiveUserId;
   await ApplyList.updateOne({ _id }, { isAgree: true }, (err, doc) => {
     if (err) {
+      ctx.body = res(code, msg, data)
       return
     }
-    code = 1;
-    msg = '修改成功'
   });
+  await ApplyList.findOne({ _id }, (err, doc) => {
+    if (err) {
+      ctx.body = res(code, msg, data)
+      return
+    }
+    if (doc) {
+      applyUserId = doc.applyUserId;
+      receiveUserId = doc.receiveUserId;
+    }
+  });
+  await User.updateOne({ _id: applyUserId }, { $addToSet: { friends: receiveUserId } }, (err, doc) => {
+    if (err) {
+      ctx.body = res(code, msg, data)
+      return
+    }
+    console.log('updateOne111', doc);
+  })
+  await User.updateOne({ _id: receiveUserId }, { $addToSet: { friends: applyUserId } }, (err, doc) => {
+    if (err) {
+      ctx.body = res(code, msg, data)
+      return
+    }
+    console.log('updateOne222', doc);
+  })
+  code = 1;
+  msg = '添加成功'
+
   ctx.body = res(code, msg, data)
 })
 module.exports = router

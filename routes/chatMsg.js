@@ -1,6 +1,7 @@
 const router = require('koa-router')()
 const res = require('../public/javascripts/res')
 const ChatMsg = require('../dbs/moduls/chatMsg')
+const ChatList = require('../dbs/moduls/chatList')
 const User = require('../dbs/moduls/users')
 const Koa = require('koa')
 
@@ -13,7 +14,8 @@ router.post('/sendChatMsg', async (ctx, next) => {
         sendUserId: request.body.sendUserId,
         receiveUserId: request.body.receiveUserId,
         chatMsg: request.body.chatMsg,
-        msgDate: new Date()
+        msgDate: new Date(),
+        isRead: false
     });
     let chatMsgObj = {
         sendUserId: request.body.sendUserId,
@@ -46,26 +48,16 @@ router.get('/getChatList', async (ctx, next) => {
     let code, msg, data
     let chatList = [];
     let user = await Koa.utils.getRedis(ctx);
-    // console.log(user);
-    // 使用for of await 解决循环内异步问题
-    for (let id of user.friends) {
-        await User.findOne({ _id: id }, (err, doc) => {
-            if (err) {
-                code = 0;
-                msg = '系统错误!';
-                data = null;
-                return
-            }
-            if (doc) {
-                let obj = {
-                    _id: doc._id,
-                    nickname: doc.nickname,
-                    avatarUrl: doc.avatarUrl
-                }
-                chatList.push(obj);
-            }
-        })
-    }
+    await ChatList.find({ $or: [{ sendUserId: user._id }, { receiveUserId: user._id }] }, (err, docs) => {
+        if (err) {
+            ctx.body = res(code, msg, data);
+            return
+        }
+        if (docs && docs.length) {
+            chatList = [...docs];
+        }
+    })
+
     code = 1;
     msg = '查询成功!'
     data = { chatList }
@@ -78,15 +70,22 @@ router.post('/getHisChatMsgList', async (ctx, next) => {
     let chatMsgList = [];
     let pageNo = request.body.pageNo;
     let pageSize = request.body.pageSize;
-    await ChatMsg.find({ $or: [{ sendUserId: request.body.sendUserId, receiveUserId: request.body.receiveUserId }, { sendUserId: request.body.receiveUserId, receiveUserId: request.body.sendUserId }] }, async (err, doc) => {
+    let user = await Koa.utils.getRedis(ctx);
+    await ChatMsg.update({ receiveUserId: user._id, isRead: false }, { isRead: true }, (err, docs) => {
+        if (err) {
+            ctx.body = res(code, msg, data);
+            return
+        }
+    })
+    await ChatMsg.find({ $or: [{ sendUserId: request.body.sendUserId, receiveUserId: request.body.receiveUserId }, { sendUserId: request.body.receiveUserId, receiveUserId: request.body.sendUserId }] }, async (err, docs) => {
         if (err) {
             code = 0;
             msg = '系统错误，查询历史消息记录失败';
             data = null;
             return
         }
-        if (doc) {
-            doc.forEach(chatMsg => {
+        if (docs) {
+            docs.forEach(chatMsg => {
                 let obj = {
                     _id: chatMsg._id,
                     sendUserId: chatMsg.sendUserId,
