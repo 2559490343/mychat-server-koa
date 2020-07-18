@@ -17,6 +17,12 @@ router.post('/sendChatMsg', async (ctx, next) => {
         msgDate: new Date(),
         isRead: false
     });
+    const chatList = new ChatList({
+        sendUserId: request.body.sendUserId,
+        receiveUserId: request.body.receiveUserId,
+        chatDate: new Date(),
+        lastChatContent: request.body.chatMsg
+    })
     let chatMsgObj = {
         sendUserId: request.body.sendUserId,
         receiveUserId: request.body.receiveUserId,
@@ -35,18 +41,52 @@ router.post('/sendChatMsg', async (ctx, next) => {
     //         return true
     //     }
     // })
-    Koa.socketMap[request.body.receiveUserId] && Koa.socketMap[request.body.receiveUserId].emit('getChatMsg', chatMsgObj);
+    Koa.socketMap[request.body.receiveUserId] &&
+        Koa.socketMap[request.body.receiveUserId].emit('getChatMsg', chatMsgObj);
     let code, msg, data;
     await chatMsg.save();
+    await ChatList.findOne({
+        $or: [{
+            sendUserId: request.body.sendUserId,
+            receiveUserId: request.body.receiveUserId
+        }, {
+            sendUserId: request.body.receiveUserId,
+            receiveUserId: request.body.sendUserId
+        }]
+    }, (err, doc) => {
+        if (err) {
+            ctx.body = res(code, msg, data)
+            return
+        }
+        if (doc) {
+            ChatList.updateOne({
+                $or: [{
+                    sendUserId: request.body.sendUserId,
+                    receiveUserId: request.body.receiveUserId
+                }, {
+                    sendUserId: request.body.receiveUserId,
+                    receiveUserId: request.body.sendUserId
+                }]
+            }, { lastChatContent: request.body.chatMsg, chatDate: new Date() }, (err, doc) => {
+                if (err) {
+                    console.log('lastchatcontent更新错误-----');
+                    ctx.body = res(code, msg, data);
+                    return
+                }
+            })
+        } else {
+            chatList.save();
+        }
+    })
     code = 1;
     msg = "发送成功!"
-    data = null;
     ctx.body = res(code, msg, data)
 })
 // 获取聊天列表
 router.get('/getChatList', async (ctx, next) => {
     let code, msg, data
-    let chatList = [];
+    let tempList = []
+    let chatList = []
     let user = await Koa.utils.getRedis(ctx);
     await ChatList.find({ $or: [{ sendUserId: user._id }, { receiveUserId: user._id }] }, (err, docs) => {
         if (err) {
@@ -54,10 +94,25 @@ router.get('/getChatList', async (ctx, next) => {
             return
         }
         if (docs && docs.length) {
-            chatList = [...docs];
+            tempList = [...docs];
         }
     })
-
+    for (let chatListItem of tempList) {
+        const _id = user._id === chatListItem.sendUserId ? chatListItem.receiveUserId : chatListItem.sendUserId;
+        await User.findOne({ _id }, (err, doc) => {
+            if (err) {
+                ctx.body = res(code, msg, data);
+                return
+            }
+            if (doc) {
+                let obj = Object.assign({}, chatListItem._doc);
+                obj.nickname = doc.nickname;
+                obj.avatarUrl = doc.avatarUrl;
+                obj.otherUserId = doc._id;
+                chatList.push(obj)
+            }
+        })
+    }
     code = 1;
     msg = '查询成功!'
     data = { chatList }
@@ -71,7 +126,7 @@ router.post('/getHisChatMsgList', async (ctx, next) => {
     let pageNo = request.body.pageNo;
     let pageSize = request.body.pageSize;
     let user = await Koa.utils.getRedis(ctx);
-    await ChatMsg.update({ receiveUserId: user._id, isRead: false }, { isRead: true }, (err, docs) => {
+    await ChatMsg.updateMany({ receiveUserId: user._id, isRead: false }, { isRead: true }, (err, docs) => {
         if (err) {
             ctx.body = res(code, msg, data);
             return
@@ -84,7 +139,7 @@ router.post('/getHisChatMsgList', async (ctx, next) => {
             data = null;
             return
         }
-        if (docs) {
+        if (docs && docs.length) {
             docs.forEach(chatMsg => {
                 let obj = {
                     _id: chatMsg._id,
@@ -93,12 +148,10 @@ router.post('/getHisChatMsgList', async (ctx, next) => {
                     chatMsg: chatMsg.chatMsg,
                     msgDate: chatMsg.msgDate
                 };
-                // chatMsgList.push(obj)
                 chatMsgList.unshift(obj)
             })
             code = 1;
             msg = '查询成功！';
-            // data = { chatMsgList }
         } else {
             code = 1;
             msg = '无历史消息记录';
